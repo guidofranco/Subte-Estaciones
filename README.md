@@ -6,7 +6,7 @@ Simple app hecha con [Streamlit](https://www.streamlit.io/) para visualizar la c
 
 Los datos provienen de la plataforma de datos abiertos de CABA
 
-Los datos de la cantidad de pasajeros provienen de esta [fuente](https://data.buenosaires.gob.ar/dataset/subte-viajes-molinetes). Comprenden el periodo 2014-2019 y fueron procesado previamente con PySpark. Los datos procesados utilizados para la visualización se encuentran [aquí](https://gdostorage.blob.core.windows.net/gcontainer/molinetes.gzip) 
+Los datos de la cantidad de pasajeros provienen de esta [fuente](https://data.buenosaires.gob.ar/dataset/subte-viajes-molinetes). Comprenden el periodo 2014-2019 y fueron procesado previamente con PySpark. Los datos procesados utilizados para la visualización se encuentran [aquí](https://gdostorage.blob.core.windows.net/gcontainer/molinetes.gzip), cabe aclarar que están comprimidos en formato parquet.
 
 ### Entorno
 
