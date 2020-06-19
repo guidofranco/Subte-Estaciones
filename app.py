@@ -1,42 +1,23 @@
 import streamlit as st
 import pandas as pd
 import pydeck
+import psycopg2
 
-@st.cache
-def load_data():
-	df =  pd.read_parquet(DATA_URL)
-	df.fecha = pd.to_datetime(df.fecha)
-	return df
+conn = psycopg2.connect('host=localhost dbname=subte user=postgres password=milo')
+cur = conn.cursor()
+cur.execute("""
+SELECT anio, estacion, long, lat, total
+FROM (
+SELECT anio, estacion, sum(total) as total
+FROM pases
+GROUP BY anio, estacion
+ORDER BY anio) totales
+INNER JOIN estaciones on estaciones.nombre = totales.estacion
+""")
 
-@st.cache
-def filter_data(df, year, month):
-	return df.loc[year, month]
+totales = cur.fetchall()
 
-@st.cache
-def load_stations():
-	stations = pd.read_csv('estaciones-de-subte.csv', usecols=['estacion'])
-	return stations.estacion.unique()
-
-@st.cache()
-def filter_station(df, station_name):
-	return df[df.estacion == station_name]
-
-@st.cache
-def group_data(df):
-	df = df.groupby([
-			df.fecha.dt.year, df.fecha.dt.month, df.estacion
-			]) \
-		.agg({'cantidad': 'sum'})
-
-	return df
-
-DATA_URL = 'https://gdostorage.blob.core.windows.net/gcontainer/molinetes.gzip'
-
-# STATION_NAMES = load_stations()
-
-estaciones = pd.read_csv('estaciones-de-subte.csv',
-						usecols=['estacion', 'lat', 'long'])
-estaciones.drop_duplicates('estacion', inplace=True, ignore_index=True)
+totales = pd.DataFrame(totales, columns=['anio', 'estacion', 'long', 'lat', 'total'], dtype='int')
 
 year = st.sidebar.slider(
 	'Seleccione un año',
@@ -48,37 +29,28 @@ month = st.sidebar.slider(
 	min_value=1,
 	max_value=12)
 
-#station = st.sidebar.selectbox(
-#	label = 'Seleccione una estación',
-#	options=STATION_NAMES)
-
-df = load_data()
-
-grouped = group_data(df)
-filtered = filter_data(grouped, year, month)
-
-joined = pd.merge(filtered, estaciones, on='estacion', how='inner')
+filtered = totales[totales.anio == year]
 
 column_layer = pydeck.Layer(
     "ColumnLayer",
-    data=joined,
+    data=filtered,
     get_position=["long", "lat"],
-    get_elevation="cantidad",
-    elevation_scale=0.01,
-    get_fill_color=['cantidad/10000 + 50'],
+    get_elevation="total",
+    elevation_scale=0.001,
+    get_fill_color=['total/50000 + 50'],
     radius=100,
     pickable=True,
     auto_highlight=True,
 )
 
-view = pydeck.data_utils.compute_view(joined[['long', 'lat']])
+view = pydeck.data_utils.compute_view(totales[['long', 'lat']])
 view.zoom = 11
 view.pitch = 45
 
 deck = pydeck.Deck(
 	column_layer, initial_view_state=view,
-	tooltip={"text": "Estación: {estacion}\n Cant. de pasajeros: {cantidad}"})
+	tooltip={"text": "Estación: {estacion}\n Cant. de pasajeros: {total}"})
 
 st.title('Cantidad de pasajeros por estación')
 st.pydeck_chart(deck)
-st.write(joined[['estacion', 'cantidad']])
+st.write(filtered[['estacion', 'total']])
