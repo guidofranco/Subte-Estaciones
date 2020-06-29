@@ -12,7 +12,7 @@ Los datos de la cantidad de pasajeros provienen de esta [fuente](https://data.bu
 
 Se trabaja con una base de datos local PostgreSQL.
 
-En este repositorio se encuentran los archivos `.sql`, con el esquema y los datos de las tablas, para que pueda levantar localmente esta base de datos.
+En este repositorio se encuentran los archivos `.sql`, con el esquema y los datos de las tablas, para que pueda levantar localmente esta base de datos (están comprimidos).
 
 ### Ejecución
 
