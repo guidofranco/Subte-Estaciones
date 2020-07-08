@@ -1,73 +1,78 @@
 import streamlit as st
 import pandas as pd
 import pydeck
-import psycopg2
+import pyodbc
 import json
 
-def connect_db(credentials_dict):
-    return psycopg2.connect(f'host={credentials_dict["host"]} \
-                        dbname={credentials_dict["dbname"]} \
-                        user={credentials_dict["user"]} \
-                        password={credentials_dict["password"]}')
+def connect_db():
+    with open('db_credentials.json') as credentials_file:
+        credentials_dict = json.load(credentials_file)
+    conn_str = f"DRIVER={credentials_dict['driver']};SERVER={credentials_dict['server']};\
+        PORT=1433;DATABASE={credentials_dict['database']};UID={credentials_dict['username']};\
+        PWD={credentials_dict['password']}"
+    return pyodbc.connect(conn_str)
 
-def load_passes_data(cursor):
+@st.cache
+def load_passes_data():
     cursor.execute("""
     SELECT anio, mes, estacion, totales.linea, long, lat, total
     FROM (
     SELECT anio, mes, estacion, linea, sum(total) as total
     FROM pases
-    GROUP BY anio, mes, estacion, linea
-    ORDER BY anio, mes, estacion) totales
+    GROUP BY anio, mes, estacion, linea) totales
     INNER JOIN estaciones on estaciones.nombre = totales.estacion
     AND estaciones.linea = totales.linea
     """)
     return cursor.fetchall()
 
-def load_passes_per_day(connection_string, month, year):
-    cur.execute(f"""
+@st.cache
+def load_passes_per_day(month, year, station):
+    cursor.execute(f"""
     SELECT dia_mes, sum(total) as total
     FROM pases
-    WHERE anio = {year} AND mes = {month} AND estacion = '{estacion}'
+    WHERE anio = {year} AND mes = {month}
+    AND estacion = '{station}'
     GROUP BY dia_mes
     ORDER BY dia_mes
     """)
-    return cur.fetchall()
+    return cursor.fetchall()
 
-def load_subway_lines(cursor):
+@st.cache
+def load_subway_lines():
     cursor.execute("""
     SELECT distinct(linea)
     FROM estaciones
     ORDER BY linea
     """)
-    return cur.fetchall()
+    return cursor.fetchall()
 
-def load_subway_stations(cursor, subway_line):
+@st.cache
+def load_subway_stations(subway_line):
     cursor.execute(f"""
     SELECT nombre
     FROM estaciones
-    WHERE linea = '{linea}'
+    WHERE linea = '{subway_line}'
     """)
     return cursor.fetchall()   
 
 def filter_passes_data():
     pass
-# Database connection
-with open('db_credentials.json') as credentials_file:
-    credentials_dict = json.load(credentials_file)
-conn = connect_db(credentials_dict)
-cur = conn.cursor()
 
-totales = load_passes_data(cur)
+conn = connect_db()
+cursor = conn.cursor()
+
+totales = load_passes_data()
+totales = [tuple(row) for row in totales]
 totales = pd.DataFrame(totales, \
-                    columns=['anio', 'mes', 'estacion', 'linea', 'long', 'lat', 'total'], \
-                    dtype='int')
+                    columns=['anio', 'mes', 'estacion', 'linea', 'long', 'lat', 'total'])
 
 st.title('Cantidad de pasajeros por estación')
-year = st.slider(
+
+year = st.sidebar.slider(
 	'Seleccione un año',
 	min_value = 2014,
 	max_value = 2019)
-month = st.slider(
+month = st.sidebar.slider(
 	'Seleccione un mes',
 	min_value=1,
 	max_value=12)
@@ -95,15 +100,17 @@ deck = pydeck.Deck(
 
 st.pydeck_chart(deck)
 
-lineas = load_subway_lines(cur)
-lineas = [l[0] for l in lineas]
-linea = st.selectbox('Linea', lineas)
-estaciones_por_linea = load_subway_stations(cur, linea)
-estaciones_por_linea = [_[0] for _ in estaciones_por_linea]
-estacion = st.selectbox("Estacion", estaciones_por_linea)
+lineas = load_subway_lines()
+lineas = [linea[0] for linea in lineas]
+linea = st.sidebar.selectbox('Linea', lineas)
+estaciones_por_linea = load_subway_stations(linea)
+estaciones_por_linea = [estacion[0] for estacion in estaciones_por_linea]
+estacion = st.sidebar.selectbox("Estacion", estaciones_por_linea)
 
-result = load_passes_per_day(cur, month, year)
-result = pd.DataFrame(result, columns=['dia_del_mes', 'total'], dtype='int')
+result = load_passes_per_day(month, year, estacion)
+result = [tuple(row) for row in result]
+result = pd.DataFrame(result, columns=['dia_del_mes', 'total'])
+# st.write(result)
 
 st.vega_lite_chart( \
     result, \
@@ -114,3 +121,5 @@ st.vega_lite_chart( \
             "y": {"field":"total", "type": "quantitative"}
         }
     })
+
+cursor.close()
